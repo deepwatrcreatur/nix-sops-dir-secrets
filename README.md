@@ -4,6 +4,16 @@ Auto-wire `sops-nix` secrets from a directory based on filename conventions.
 
 This is useful when you want to manage secrets by simply adding/removing encrypted files in a folder, without having to edit Nix code for each new secret.
 
+## Configuration Model
+
+This flake does **not** try to auto-discover your repo layout. You must point it at a directory via `services.sopsDirSecrets.secretsDir`.
+
+Reason: Nix path resolution is lexical (relative paths resolve relative to the module file), and a generic flake cannot reliably guess where *your* `secrets/` directories live.
+
+In practice, you still get the “just add/remove files” workflow by setting:
+- NixOS/system secrets: `services.sopsDirSecrets.secretsDir = ./secrets;` (in the host/module that sits next to your system `secrets/` directory)
+- Home Manager/user secrets: `services.sopsDirSecrets.secretsDir = ./secrets;` (in the user module that sits next to the user’s `secrets/` directory)
+
 ## Conventions
 
 ### Simple one-value secrets (`*.txt.enc`)
@@ -96,11 +106,27 @@ Import the module alongside `sops-nix` NixOS module:
 
 ## Options
 
-- `services.sopsDirSecrets.secretsDir`: the directory containing encrypted secrets
-- `services.sopsDirSecrets.defaultMode`: default secret file mode
+### Required
+
+- `services.sopsDirSecrets.secretsDir`: directory containing encrypted secrets
+
+### Defaults
+
+Home Manager module defaults:
+- `defaultMode = "0600"`
+
+NixOS module defaults:
+- `defaultMode = "0400"`
+
+Filename convention defaults:
+- `txt.enable = true`, `txt.suffix = ".txt.enc"`, `txt.format = "json"`, `txt.key = "data"`
+- `yaml.enable = true`, `yaml.suffixes = [ ".yaml.enc" ".yml.enc" ]`, `yaml.separator = "__"`
+
+### Customization
+
 - `services.sopsDirSecrets.txt.*`: configure `*.txt.enc` handling (suffix/format/key)
 - `services.sopsDirSecrets.yaml.*`: configure `<name>__<key>.yaml.enc` handling
-- `services.sopsDirSecrets.extraSecrets`: explicit overrides for special cases (binary files, custom paths, etc.)
+- `services.sopsDirSecrets.extraSecrets`: explicit overrides for special cases (binary files, custom paths, custom modes)
 
 ## Library
 
