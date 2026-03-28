@@ -128,6 +128,11 @@ Filename convention defaults:
 - `services.sopsDirSecrets.yaml.*`: configure `<name>__<key>.yaml.enc` handling
 - `services.sopsDirSecrets.extraSecrets`: explicit overrides for special cases (binary files, custom paths, custom modes)
 
+## Notes
+
+- Custom `yaml.suffixes` are supported as long as filenames still follow `<name><separator><key><suffix>`.
+- Auto-generated secrets must resolve to unique names after normalization. If two files collapse to the same secret name, evaluation now fails with a clear error instead of silently overwriting one entry.
+
 ## Library
 
 The flake also exports `lib.mkSecretsFromDir` so you can use the logic directly:
