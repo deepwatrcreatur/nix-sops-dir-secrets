@@ -3,6 +3,32 @@ let
   # Transform a filename base into a secret name.
   defaultNameFromBase = base: lib.toLower (lib.replaceStrings [ "." "_" " " ] [ "-" "-" "-" ] base);
 
+  yamlParts =
+    separator: suffixes: file:
+    let
+      matchingSuffix = lib.findFirst (suffix: lib.hasSuffix suffix file) null suffixes;
+    in
+    if matchingSuffix == null then
+      null
+    else
+      let
+        withoutSuffix = lib.removeSuffix matchingSuffix file;
+        parts = lib.splitString separator withoutSuffix;
+      in
+      if builtins.length parts < 2 then
+        null
+      else
+        let
+          keyName = lib.last parts;
+          base = lib.concatStringsSep separator (lib.init parts);
+        in
+        if base == "" || keyName == "" then
+          null
+        else
+          {
+            inherit base keyName;
+          };
+
   mkSecretsFromDir =
     {
       secretsDir,
@@ -53,15 +79,10 @@ let
           };
         };
 
-      yamlKeyMatch =
-        file:
-        # `<name>__<key>.yaml.enc` or `.yml.enc`
-        builtins.match "^(.*)${yaml.separator}([^/]+)\\.(yaml|yml)\\.enc$" file;
-
       yamlFiles =
         if yaml.enable then
           lib.filter (
-            f: isRegular f && builtins.any (s: lib.hasSuffix s f) yaml.suffixes && yamlKeyMatch f != null
+            f: isRegular f && yamlParts yaml.separator yaml.suffixes f != null
           ) files
         else
           [ ];
@@ -69,9 +90,9 @@ let
       mkYaml =
         file:
         let
-          m = yamlKeyMatch file;
-          base = builtins.elemAt m 0;
-          keyName = builtins.elemAt m 1;
+          parts = yamlParts yaml.separator yaml.suffixes file;
+          base = parts.base;
+          keyName = parts.keyName;
           name = nameFromBase base;
         in
         {
@@ -84,7 +105,13 @@ let
           };
         };
 
-      auto = lib.listToAttrs (map mkTxt txtFiles) // lib.listToAttrs (map mkYaml yamlFiles);
+      generatedSecrets = map mkTxt txtFiles ++ map mkYaml yamlFiles;
+      duplicateNames = lib.attrNames (lib.filterAttrs (_: values: builtins.length values > 1) (lib.groupBy (entry: entry.name) generatedSecrets));
+      auto =
+        if duplicateNames != [ ] then
+          throw "nix-sops-dir-secrets: duplicate generated secret names: ${lib.concatStringsSep ", " duplicateNames}"
+        else
+          lib.listToAttrs generatedSecrets;
 
     in
     auto // extraSecrets;
